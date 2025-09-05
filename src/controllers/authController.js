@@ -1,8 +1,9 @@
 import crypto from 'crypto';
 import axios from 'axios';
-import { oAuth2Client } from '../lib/gmailClient.js';
+// import { oAuth2Client } from '../lib/gmailClient.js';
 import { createUser, getUserByEmail, updateUserLogin } from '../services/authService.js';
-import { getGmailUserInfo, setupGmailWatch } from '../services/gmailService.js';
+import { getGmailUserInfo, setupGmailWatch, getTokens, generateGoogleAuthUrl } from '../services/gmailService.js';
+import { GOOGLE_CLIENT_ID, GOOGLE_REDIRECT_URI, GOOGLE_CLIENT_SECRET } from '../lib/config.js';
 
 // Gmail scopes for email access
 const scopes = [
@@ -27,12 +28,20 @@ export const getAuthUrl = (req, res) => {
         req.session.state = state;
 
         // Generate authorization URL
-        const authorizationUrl = oAuth2Client.generateAuthUrl({
-            access_type: 'offline',
-            scope: scopes,
-            include_granted_scopes: true,
-            state: state,
-            prompt: 'consent' // Force consent screen to get refresh token
+        // const authorizationUrl = oAuth2Client.generateAuthUrl({
+        //     access_type: 'offline',
+        //     scope: scopes,
+        //     include_granted_scopes: true,
+        //     state: state,
+        //     prompt: 'consent' // Force consent screen to get refresh token
+        // });
+
+
+        const authorizationUrl = generateGoogleAuthUrl({
+            clientId: GOOGLE_CLIENT_ID,
+            redirectUri: GOOGLE_REDIRECT_URI,
+            scopes: scopes,
+            state: state
         });
 
         res.json({
@@ -67,7 +76,8 @@ export const handleCallback = async (req, res) => {
         }
 
         // Exchange authorization code for tokens
-        const { tokens } = await oAuth2Client.getToken(code);
+        // const { tokens } = await oAuth2Client.getToken(code);
+        const { tokens } = await getTokens({ code, clientId: GOOGLE_CLIENT_ID, clientSecret: GOOGLE_CLIENT_SECRET, redirectUri: GOOGLE_REDIRECT_URI });
 
         // Store tokens in session
         req.session.tokens = tokens;

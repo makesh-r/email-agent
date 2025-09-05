@@ -4,6 +4,48 @@ import { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET } from '../lib/config.js';
 // Replace these with your actual credentials
 const TOPIC_NAME = 'projects/wp-mcp-93b69/topics/gmail-inbox-updates';
 
+export function generateGoogleAuthUrl({ clientId, redirectUri, scopes, state }) {
+    const baseUrl = "https://accounts.google.com/o/oauth2/v2/auth";
+
+    const params = new URLSearchParams({
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        response_type: "code",
+        scope: scopes.join(" "),
+        access_type: "offline",
+        include_granted_scopes: "true",
+        state,
+        prompt: "consent",
+    });
+
+    return `${baseUrl}?${params.toString()}`;
+}
+
+export async function getTokens({ code, clientId, clientSecret, redirectUri }) {
+    const url = "https://oauth2.googleapis.com/token";
+
+    const body = new URLSearchParams({
+        code,
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_uri: redirectUri,
+        grant_type: "authorization_code",
+    });
+
+    const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: body.toString(),
+    });
+
+    if (!res.ok) {
+        throw new Error(`Token exchange failed: ${res.status} ${await res.text()}`);
+    }
+
+    return res.json(); // { access_token, refresh_token, expires_in, id_token, ... }
+}
+
+
 // Make Gmail API call with auto-refresh on 401
 export const gmailRequest = async (config, accessToken, refreshToken, retry = false) => {
     try {
