@@ -10,6 +10,7 @@ import { saveConversation } from "../tools/getConversation.js";
 export const handleGmailWebhook = async (req, res) => {
     try {
         console.log("REQ-BODY-MESSAGE", req.body.message);
+        const messageId = req.body.message?.messageId;
         const encodedData = req.body.message?.data;
         if (!encodedData) {
             return res.status(400).send('Missing data');
@@ -26,10 +27,10 @@ export const handleGmailWebhook = async (req, res) => {
         console.log("History ID:", historyId);
         console.log("Email Address:", emailAddress);
 
-        return res.status(200).send('Message received');
+        // return res.status(200).send('Message received');
 
-        if (!historyId || !emailAddress) {
-            return res.status(400).send('Missing historyId or emailAddress');
+        if (!emailAddress) {
+            return res.status(200).send('Missing emailAddress');
         }
 
         // Step 1: Get history since the given historyId
@@ -41,29 +42,29 @@ export const handleGmailWebhook = async (req, res) => {
 
         const user = await getUserByEmail(emailAddress);
         if (!user) {
-            return res.status(400).send('User not found');
+            return res.status(200).send('User not found');
         }
         const accessToken = user.tokens.accessToken;
         const refreshToken = user.tokens.refreshToken;
         const vectorStoreId = user.vectorStoreId || "";
 
         // Step 1: Get message history
-        const historyRes = await gmailRequest({
-            method: 'GET',
-            url: `https://gmail.googleapis.com/gmail/v1/users/me/history`,
-            params: {
-                startHistoryId: historyId,
-                historyTypes: 'messageAdded',
-            },
-        }, accessToken, refreshToken);
+        // const historyRes = await gmailRequest({
+        //     method: 'GET',
+        //     url: `https://gmail.googleapis.com/gmail/v1/users/me/history`,
+        //     params: {
+        //         startHistoryId: historyId,
+        //         historyTypes: 'messageAdded',
+        //     },
+        // }, accessToken, refreshToken);
 
-        console.log("History response:", historyRes);
+        // console.log("History response:", historyRes);
 
-        const messageId = historyRes?.data?.history?.[0]?.messages?.[0]?.id;
-        if (!messageId) {
-            console.log("No new message found in history.");
-            return res.sendStatus(204);
-        }
+        // const messageId = historyRes?.data?.history?.[0]?.messages?.[0]?.id;
+        // if (!messageId) {
+        //     console.log("No new message found in history.");
+        //     return res.sendStatus(204);
+        // }
 
         // Step 2: Get the message details
         // const { data: message } = await gmail.users.messages.get({
@@ -162,6 +163,6 @@ export const handleGmailWebhook = async (req, res) => {
         });
     } catch (err) {
         console.error('Error in gmail-notify handler:', err);
-        res.status(500).send('Failed to process email');
+        res.status(200).send('Failed to process email');
     }
 };
