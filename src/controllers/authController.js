@@ -86,6 +86,7 @@ export const handleCallback = async (req, res) => {
         req.session.isAuthenticated = true;
 
         const userInfo = await getGmailUserInfo(tokens.access_token);
+        await setupGmailWatch(tokens.access_token);
 
         const user = await getUserByEmail(userInfo.email);
         if (!user) {
@@ -94,7 +95,6 @@ export const handleCallback = async (req, res) => {
                 name: userInfo.name,
                 tokens: tokens
             });
-            await setupGmailWatch(tokens.access_token);
             res.json({
                 success: true,
                 message: 'Authentication successful',
