@@ -7,7 +7,7 @@ export const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 export const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 export const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI;
 
-export const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS;
+// export const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS;
 
 export const AWS_REGION = process.env.AWS_REGION;
 export const S3_VECTOR_BUCKET = process.env.S3_VECTOR_BUCKET;

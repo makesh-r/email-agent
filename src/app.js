@@ -6,7 +6,7 @@ import fileUpload from 'express-fileupload';
 import emailRoutes from "./routes/emailRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
 import fileRoutes from "./routes/fileRoutes.js";
-import { ALLOWED_ORIGINS } from './lib/config.js';
+// import { ALLOWED_ORIGINS } from './lib/config.js';
 
 const app = express();
 
