@@ -19,7 +19,7 @@ export const handleGmailWebhook = async (req, res) => {
 
         // const historyId = "197309";
         const hId = parseInt(decodedData.historyId);
-        const historyId = hId - 1;
+        const historyId = hId;
         const emailAddress = decodedData.emailAddress;
 
         if (!historyId || !emailAddress) {
