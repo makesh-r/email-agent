@@ -17,8 +17,9 @@ export const handleGmailWebhook = async (req, res) => {
         const decodedData = JSON.parse(Buffer.from(encodedData, 'base64').toString());
         console.log("Decoded message data:", decodedData);
 
-        const historyId = "197309";
-        // const historyId = parseInt(decodedData.historyId);
+        // const historyId = "197309";
+        const hId = parseInt(decodedData.historyId);
+        const historyId = hId - 1;
         const emailAddress = decodedData.emailAddress;
 
         if (!historyId || !emailAddress) {
