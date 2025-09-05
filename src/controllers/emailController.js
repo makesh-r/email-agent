@@ -9,6 +9,7 @@ import { saveConversation } from "../tools/getConversation.js";
 // Handle Gmail webhook
 export const handleGmailWebhook = async (req, res) => {
     try {
+        console.log("REQ-BODY-MESSAGE", req.body.message);
         const encodedData = req.body.message?.data;
         if (!encodedData) {
             return res.status(400).send('Missing data');
@@ -21,6 +22,11 @@ export const handleGmailWebhook = async (req, res) => {
         const hId = parseInt(decodedData.historyId);
         const historyId = hId;
         const emailAddress = decodedData.emailAddress;
+
+        console.log("History ID:", historyId);
+        console.log("Email Address:", emailAddress);
+
+        return res.status(200).send('Message received');
 
         if (!historyId || !emailAddress) {
             return res.status(400).send('Missing historyId or emailAddress');
