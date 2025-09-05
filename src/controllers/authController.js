@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import axios from 'axios';
-// import { oAuth2Client } from '../lib/gmailClient.js';
+import { oAuth2Client } from '../lib/gmailClient.js';
 import { createUser, getUserByEmail, updateUserLogin } from '../services/authService.js';
 import { getGmailUserInfo, setupGmailWatch, getTokens, generateGoogleAuthUrl } from '../services/gmailService.js';
 import { GOOGLE_CLIENT_ID, GOOGLE_REDIRECT_URI, GOOGLE_CLIENT_SECRET } from '../lib/config.js';
@@ -74,10 +74,12 @@ export const handleCallback = async (req, res) => {
                 error: 'Invalid state parameter'
             });
         }
-
+        console.log('code', code);
         // Exchange authorization code for tokens
-        // const { tokens } = await oAuth2Client.getToken(code);
-        const { tokens } = await getTokens({ code, clientId: GOOGLE_CLIENT_ID, clientSecret: GOOGLE_CLIENT_SECRET, redirectUri: GOOGLE_REDIRECT_URI });
+        const { tokens } = await oAuth2Client.getToken(code);
+        // const { tokens } = await getTokens({ code, clientId: GOOGLE_CLIENT_ID, clientSecret: GOOGLE_CLIENT_SECRET, redirectUri: GOOGLE_REDIRECT_URI });
+
+        console.log('tokens', tokens);
 
         // Store tokens in session
         req.session.tokens = tokens;

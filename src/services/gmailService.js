@@ -39,7 +39,7 @@ export async function getTokens({ code, clientId, clientSecret, redirectUri }) {
     });
 
     if (!res.ok) {
-        throw new Error(`Token exchange failed: ${res.status} ${await res.text()}`);
+        throw new Error(`Token exchange failed: ${res} ${res.status} ${await res.text()}`);
     }
 
     return res.json(); // { access_token, refresh_token, expires_in, id_token, ... }
