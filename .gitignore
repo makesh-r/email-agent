@@ -156,4 +156,4 @@ config/production.js
 
 .env
 
-firebaseConfig.js
+firebaseConfig.json
