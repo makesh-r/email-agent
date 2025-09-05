@@ -49,6 +49,8 @@ export const handleGmailWebhook = async (req, res) => {
             },
         }, accessToken, refreshToken);
 
+        console.log("History response:", historyRes);
+
         const messageId = historyRes?.data?.history?.[0]?.messages?.[0]?.id;
         if (!messageId) {
             console.log("No new message found in history.");
