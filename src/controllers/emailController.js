@@ -1,16 +1,15 @@
 import { run } from "@openai/agents";
 // import { gmail } from "../lib/gmailClient.js";
 import { emailAgent } from "../agents/emailAgent.js";
-import { gmailRequest } from "../services/gmailService.js";
-import { getUserByEmail } from "../services/authService.js";
+import { extractEmailFromHeader, fetchGmailMessage, getAccessToken, gmailRequest } from "../services/gmailService.js";
+import { getUserByEmail, updateUserProfile, updateUserTokens } from "../services/authService.js";
 import { sendEmailToId } from "../tools/sendEmail.js";
 import { saveConversation } from "../tools/getConversation.js";
+import { isAppointmentExists, createAppointment } from "../services/appointmentService.js";
 
 // Handle Gmail webhook
 export const handleGmailWebhook = async (req, res) => {
     try {
-        console.log("REQ-BODY-MESSAGE", req.body.message);
-        const messageId = req.body.message?.messageId;
         const encodedData = req.body.message?.data;
         if (!encodedData) {
             return res.status(400).send('Missing data');
@@ -19,28 +18,15 @@ export const handleGmailWebhook = async (req, res) => {
         const decodedData = JSON.parse(Buffer.from(encodedData, 'base64').toString());
         console.log("Decoded message data:", decodedData);
 
-        // const historyId = "197309";
-        const hId = parseInt(decodedData.historyId);
-        const historyId = hId;
+        const historyId = parseInt(decodedData.historyId);
         const emailAddress = decodedData.emailAddress;
-
-        console.log("History ID:", historyId);
-        console.log("Email Address:", emailAddress);
-
-        // return res.status(200).send('Message received');
 
         if (!emailAddress) {
             return res.status(200).send('Missing emailAddress');
         }
 
-        // Step 1: Get history since the given historyId
-        // const historyRes = await gmail.users.history.list({
-        //     userId: 'me',
-        //     startHistoryId: historyId,
-        //     historyTypes: ['messageAdded'],
-        // });
-
         const user = await getUserByEmail(emailAddress);
+        const watchHistoryId = user.watchHistoryId;
         if (!user) {
             return res.status(200).send('User not found');
         }
@@ -49,38 +35,76 @@ export const handleGmailWebhook = async (req, res) => {
         const vectorStoreId = user.vectorStoreId || "";
 
         // Step 1: Get message history
-        // const historyRes = await gmailRequest({
-        //     method: 'GET',
-        //     url: `https://gmail.googleapis.com/gmail/v1/users/me/history`,
-        //     params: {
-        //         startHistoryId: historyId,
-        //         historyTypes: 'messageAdded',
-        //     },
-        // }, accessToken, refreshToken);
-
-        // console.log("History response:", historyRes);
-
-        // const messageId = historyRes?.data?.history?.[0]?.messages?.[0]?.id;
-        // if (!messageId) {
-        //     console.log("No new message found in history.");
-        //     return res.sendStatus(204);
-        // }
-
-        // Step 2: Get the message details
-        // const { data: message } = await gmail.users.messages.get({
-        //     userId: 'me',
-        //     id: messageId,
-        //     format: 'full',
-        // });
-        // Step 2: Get the message details
-        const { data: message } = await gmailRequest({
+        const historyRes = await gmailRequest({
             method: 'GET',
-            url: `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}`,
-            params: { format: 'full' },
+            url: `https://gmail.googleapis.com/gmail/v1/users/me/history`,
+            params: {
+                startHistoryId: watchHistoryId,
+                historyTypes: 'messageAdded',
+            },
         }, accessToken, refreshToken);
 
+        // Iterate through history and log messages and messagesAdded
+        const history = historyRes?.data?.history;
+        if (history && Array.isArray(history)) {
+            history.forEach((item, index) => {
+                console.log(`\n--- History Item ${index} (ID: ${item.id}) ---`);
+                console.log("Messages Added:", JSON.stringify(item.messagesAdded, null, 2));
+                item.messagesAdded.forEach(async (message) => {
+                    await loopFunction(message.message.id, accessToken, refreshToken, watchHistoryId, historyId, emailAddress, user.id, vectorStoreId);
+                });
+            });
+        }
+
+        console.log("--------------------------------");
+
+        return res.status(200);
+
+    } catch (err) {
+        console.error('Error in gmail-notify handler:', err);
+        res.status(200).send('Failed to process email');
+    }
+};
+
+
+const loopFunction = async (messageId, accessToken, refreshToken, watchHistoryId, historyId, emailAddress, userId, vectorStoreId) => {
+
+    const user = await getUserByEmail(emailAddress);
+    const tokenExpiresAt = user.tokens.expiryDate;
+    const now = Date.now();
+    if (tokenExpiresAt < now) {
+        const newTokens = await getAccessToken(refreshToken);
+
+        const newExpiryDate = Date.now() + newTokens.expiryDate * 1000;
+        updateUserTokens(userId, {
+            access_token: newTokens.accessToken,
+            expiry_date: newExpiryDate,
+            refresh_token: refreshToken,
+        });
+        accessToken = newTokens.accessToken;
+    }
+
+    const message = await fetchGmailMessage({
+        messageId,
+        accessToken,
+        refreshToken,
+        format: "full",
+    });
+
+    if (message.labelIds.includes("UNREAD") && message.labelIds.includes("INBOX") && message.labelIds.includes("CATEGORY_PERSONAL")) {
+
         const headers = message.payload.headers;
-        const from = headers.find((h) => h.name === 'From')?.value;
+        const fromEmail = headers.find((h) => h.name === 'From')?.value;
+        const from = extractEmailFromHeader(fromEmail);
+
+        const isAppointmentExist = await isAppointmentExists(emailAddress, from);
+
+        console.log("Is appointment exist:", isAppointmentExist);
+
+        if (!isAppointmentExist) {
+            await createAppointment(emailAddress, from);
+        }
+
         const subject = headers.find((h) => h.name === 'Subject')?.value;
 
         let body = '';
@@ -99,20 +123,11 @@ export const handleGmailWebhook = async (req, res) => {
         console.log("Email body:", body);
 
         const input = `{
-            "assistantEmail": "${emailAddress}",
-            "customerEmail": "${from}",
-            "subject": "${subject}",
-            "body": "${body}",
-            "vectorStoreId": "${vectorStoreId}"
-        }`;
-
-        // const newHistory = [{
-        //     role: 'user',
-        //     content: {
-        //         subject,
-        //         body,
-        //     },
-        // }];
+        "assistantEmail": "${emailAddress}",
+        "customerEmail": "${from}",
+        "subject": "${subject}",
+        "body": "${body}",
+        "vectorStoreId": "${vectorStoreId}"}`;
 
         const result = await run(emailAgent, input);
         console.log("Result:", result.finalOutput);
@@ -120,14 +135,6 @@ export const handleGmailWebhook = async (req, res) => {
         console.log("Parsed result:", parsedResult);
 
         await sendEmailToId(parsedResult.to, parsedResult.subject, parsedResult.body, accessToken, refreshToken);
-
-        // newHistory.push({
-        //     role: 'assistant',
-        //     content: {
-        //         subject: parsedResult.subject,
-        //         body: parsedResult.body,
-        //     },
-        // });
 
         await saveConversation(emailAddress, from, "user", {
             subject: subject,
@@ -140,15 +147,12 @@ export const handleGmailWebhook = async (req, res) => {
             body: parsedResult.body,
         });
 
-        // Mark the message as read
-        // await gmail.users.messages.modify({
-        //     userId: 'me',
-        //     id: messageId,
-        //     requestBody: {
-        //         removeLabelIds: ['UNREAD'],
-        //     },
-        // });
-        // Step 3: Mark as read
+        if (historyId > watchHistoryId) {
+            await updateUserProfile(userId, {
+                watchHistoryId: historyId,
+            });
+        }
+
         await gmailRequest({
             method: 'POST',
             url: `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/modify`,
@@ -157,12 +161,5 @@ export const handleGmailWebhook = async (req, res) => {
             },
         }, accessToken, refreshToken);
 
-        res.status(200).json({
-            message: "Email processed successfully",
-            result: result.finalOutput,
-        });
-    } catch (err) {
-        console.error('Error in gmail-notify handler:', err);
-        res.status(200).send('Failed to process email');
     }
-};
+}

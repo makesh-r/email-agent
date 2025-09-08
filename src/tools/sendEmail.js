@@ -54,8 +54,8 @@ export const sendEmailToId = async (to, subject, text, accessToken, refreshToken
 
         if (isUnauthorized && !retry) {
             console.warn(`[sendEmailToId] Access token expired. Refreshing token and retrying...`);
-            const newAccessToken = await getAccessToken(refreshToken);
-            return sendEmailToId(to, subject, text, newAccessToken, refreshToken, true);
+            const newTokens = await getAccessToken(refreshToken);
+            return sendEmailToId(to, subject, text, newTokens.accessToken, refreshToken, true);
         }
 
         console.error(`[sendEmailToId] Failed to send email to ${to}:`, error.response?.data || error.message);

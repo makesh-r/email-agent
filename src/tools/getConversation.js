@@ -8,6 +8,7 @@ export const getConversation = async (assistantEmail, customerEmail) => {
     const ref = await db.collection("emails")
         .where("assistantEmail", "==", assistantEmail)
         .where("customerEmail", "==", customerEmail)
+        .orderBy("createdAt", "asc")
         .get();
 
     if (!ref.empty) {

@@ -28,21 +28,21 @@ export const getAuthUrl = (req, res) => {
         req.session.state = state;
 
         // Generate authorization URL
-        // const authorizationUrl = oAuth2Client.generateAuthUrl({
-        //     access_type: 'offline',
-        //     scope: scopes,
-        //     include_granted_scopes: true,
-        //     state: state,
-        //     prompt: 'consent' // Force consent screen to get refresh token
-        // });
-
-
-        const authorizationUrl = generateGoogleAuthUrl({
-            clientId: GOOGLE_CLIENT_ID,
-            redirectUri: GOOGLE_REDIRECT_URI,
-            scopes: scopes,
-            state: state
+        const authorizationUrl = oAuth2Client.generateAuthUrl({
+            access_type: 'offline',
+            scope: scopes,
+            include_granted_scopes: true,
+            state: state,
+            prompt: 'consent' // Force consent screen to get refresh token
         });
+
+
+        // const authorizationUrl = generateGoogleAuthUrl({
+        //     clientId: GOOGLE_CLIENT_ID,
+        //     redirectUri: GOOGLE_REDIRECT_URI,
+        //     scopes: scopes,
+        //     state: state
+        // });
 
         res.json({
             success: true,
@@ -79,21 +79,23 @@ export const handleCallback = async (req, res) => {
         const { tokens } = await oAuth2Client.getToken(code);
         // const { tokens } = await getTokens({ code, clientId: GOOGLE_CLIENT_ID, clientSecret: GOOGLE_CLIENT_SECRET, redirectUri: GOOGLE_REDIRECT_URI });
 
-        console.log('tokens', tokens);
+        console.log('tokens:', tokens);
 
         // Store tokens in session
         req.session.tokens = tokens;
         req.session.isAuthenticated = true;
 
         const userInfo = await getGmailUserInfo(tokens.access_token);
-        await setupGmailWatch(tokens.access_token);
+        console.log("User Info:", userInfo);
+        const watch = await setupGmailWatch(tokens.access_token);
 
         const user = await getUserByEmail(userInfo.email);
         if (!user) {
             const newUser = await createUser({
                 email: userInfo.email,
                 name: userInfo.name,
-                tokens: tokens
+                tokens: tokens,
+                watchHistoryId: watch.historyId
             });
             res.json({
                 success: true,

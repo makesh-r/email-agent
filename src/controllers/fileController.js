@@ -32,9 +32,9 @@ export const handleUpload = async (req, res) => {
             }]
         };
 
+        await attachFileToVectorStoreOA(vectorStoreId, fileId);
         await updateUserProfile(userId, dataToUpdate);
 
-        await attachFileToVectorStoreOA(vectorStoreId, fileId);
 
         return sendSuccess(res, 'File uploaded successfully');
 
