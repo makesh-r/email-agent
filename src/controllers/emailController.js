@@ -1,14 +1,180 @@
 import { run } from "@openai/agents";
 // import { gmail } from "../lib/gmailClient.js";
 import { emailAgent } from "../agents/emailAgent.js";
-import { extractEmailFromHeader, fetchGmailMessage, getAccessToken, gmailRequest } from "../services/gmailService.js";
-import { getUserByEmail, updateUserProfile, updateUserTokens } from "../services/authService.js";
+import { extractEmailFromHeader, fetchGmailMessage, getAccessToken, gmailRequest, setupGmailWatch, stopGmailWatch } from "../services/gmailService.js";
+import { getUserByEmail, updateUserProfile, updateUserTokens, getUserById } from "../services/authService.js";
 import { sendEmailToId } from "../tools/sendEmail.js";
 import { saveConversation } from "../tools/getConversation.js";
 import { isAppointmentExists, createAppointment } from "../services/appointmentService.js";
+import { sendSuccess } from "../utils/responseUtil.js";
+
+// 🧠 In-memory maps for per-user coordination (replace with Redis for multi-instance)
+const processingLocks = new Map();      // Map<email, boolean>
+const debounceTimers = new Map();       // Map<email, NodeJS.Timeout>
+const pendingHistoryIds = new Map();    // Map<email, number>
+
+/**
+ * Gmail Pub/Sub webhook entrypoint.
+ * Handles bursts, queues updates during processing, and processes incrementally.
+ */
+export const handleGmailWebhook = async (req, res) => {
+    try {
+        const encodedData = req.body.message?.data;
+        if (!encodedData) {
+            return res.status(400).send('Missing data');
+        }
+
+        const decodedData = JSON.parse(Buffer.from(encodedData, 'base64').toString());
+        console.log('📩 Decoded Gmail Pub/Sub:', decodedData);
+
+        const historyId = parseInt(decodedData.historyId, 10);
+        const emailAddress = decodedData.emailAddress;
+        if (!emailAddress) {
+            return res.status(200).send('Missing emailAddress');
+        }
+
+        // Schedule debounced processing for this mailbox
+        scheduleDebouncedProcessing(emailAddress, historyId);
+
+        return res.status(200).send('OK');
+    } catch (err) {
+        console.error('❌ Error in Gmail webhook handler:', err);
+        return res.status(200).send('Failed to process email');
+    }
+};
+
+/**
+ * Schedules Gmail processing after a short debounce window to batch notifications.
+ */
+function scheduleDebouncedProcessing(email, historyId) {
+    // Track the highest historyId received
+    const prev = pendingHistoryIds.get(email) || 0;
+    pendingHistoryIds.set(email, Math.max(prev, historyId));
+
+    // Reset debounce timer
+    if (debounceTimers.has(email)) {
+        clearTimeout(debounceTimers.get(email));
+    }
+
+    const timer = setTimeout(() => {
+        triggerProcessing(email);
+        debounceTimers.delete(email);
+    }, 3000); // 3-second debounce window
+
+    debounceTimers.set(email, timer);
+}
+
+/**
+ * Triggers Gmail processing. If already running, new historyIds are just queued.
+ */
+async function triggerProcessing(email) {
+    if (processingLocks.get(email)) {
+        console.log(`⏸️ Processing already in progress for ${email}, new historyId queued`);
+        return;
+    }
+
+    processingLocks.set(email, true);
+    try {
+        let continueProcessing = true;
+
+        while (continueProcessing) {
+            const latestHistoryId = pendingHistoryIds.get(email);
+            if (!latestHistoryId) {
+                continueProcessing = false;
+                break;
+            }
+
+            // Remove current pending ID before processing
+            pendingHistoryIds.delete(email);
+
+            console.log(`🚀 Processing Gmail changes for ${email} up to historyId ${latestHistoryId}`);
+            await processGmailHistory(email, latestHistoryId);
+
+            // If new notifications arrived during processing, loop again
+            if (pendingHistoryIds.has(email)) {
+                console.log(`🔔 New Gmail changes queued during processing for ${email}, looping again`);
+            } else {
+                continueProcessing = false;
+            }
+        }
+    } catch (err) {
+        console.error(`❌ Processing error for ${email}:`, err);
+    } finally {
+        processingLocks.delete(email);
+    }
+}
+
+/**
+* Core Gmail history processing for a user.
+*/
+async function processGmailHistory(email, latestHistoryId) {
+    const user = await getUserByEmail(email);
+    if (!user) {
+        console.warn(`⚠️ User ${email} not found`);
+        return;
+    }
+
+    const { watchHistoryId, tokens, vectorStoreId } = user;
+    const accessToken = tokens.accessToken;
+    const refreshToken = tokens.refreshToken;
+
+    // 1️⃣ Fetch Gmail history incrementally
+    const historyRes = await gmailRequest(
+        {
+            method: 'GET',
+            url: `https://gmail.googleapis.com/gmail/v1/users/me/history`,
+            params: {
+                startHistoryId: watchHistoryId,
+                historyTypes: 'messageAdded',
+            },
+        },
+        accessToken,
+        refreshToken
+    );
+
+    const history = historyRes?.data?.history;
+    if (!Array.isArray(history)) {
+        console.log(`ℹ️ No new history for ${email}`);
+        return;
+    }
+
+    // 2️⃣ Process each new message sequentially
+    for (const item of history) {
+        if (item.messagesAdded) {
+            for (const msg of item.messagesAdded) {
+                const msgId = msg.message.id;
+
+                // const alreadyProcessed = await checkIfMessageProcessed(msgId);
+                // if (alreadyProcessed) {
+                //     console.log(`🔁 Skipping already processed message ${msgId}`);
+                //     continue;
+                // }
+
+                await loopFunction(
+                    msgId,
+                    accessToken,
+                    refreshToken,
+                    watchHistoryId,
+                    latestHistoryId,
+                    email,
+                    user.id,
+                    vectorStoreId || ''
+                );
+
+                // await markMessageAsProcessed(msgId);
+            }
+        }
+    }
+
+    // 3️⃣ Update user's historyId to the latest processed
+    // await updateUserHistoryId(email, latestHistoryId);
+    // console.log(`✅ Updated ${email}'s historyId → ${latestHistoryId}`);
+    console.log(`✅ Updated ${email}'s historyId`);
+}
+
 
 // Handle Gmail webhook
-export const handleGmailWebhook = async (req, res) => {
+export const handleGmailWebhook2 = async (req, res) => {
     try {
         const encodedData = req.body.message?.data;
         if (!encodedData) {
@@ -162,4 +328,25 @@ const loopFunction = async (messageId, accessToken, refreshToken, watchHistoryId
         }, accessToken, refreshToken);
 
     }
+}
+
+export const handleStartWatch = async (req, res) => {
+    const userId = req.params.userId;
+    const user = await getUserById(userId);
+    const watch = await setupGmailWatch(user.tokens.accessToken);
+    await updateUserProfile(userId, {
+        watchHistoryId: watch.historyId,
+        isGmailWatchEnabled: true
+    });
+    return sendSuccess(res, 'Watch started');
+}
+
+export const handleStopWatch = async (req, res) => {
+    const userId = req.params.userId;
+    const user = await getUserById(userId);
+    const watch = await stopGmailWatch(user.tokens.accessToken);
+    await updateUserProfile(userId, {
+        isGmailWatchEnabled: false
+    });
+    return sendSuccess(res, 'Watch stopped');
 }

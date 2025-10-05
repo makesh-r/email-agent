@@ -95,7 +95,8 @@ export const handleCallback = async (req, res) => {
                 email: userInfo.email,
                 name: userInfo.name,
                 tokens: tokens,
-                watchHistoryId: watch.historyId
+                watchHistoryId: watch.historyId,
+                isGmailWatchEnabled: true
             });
             res.json({
                 success: true,

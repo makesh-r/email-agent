@@ -1,5 +1,5 @@
 import express from 'express';
-import { handleGmailWebhook } from '../controllers/emailController.js';
+import { handleGmailWebhook, handleStopWatch, handleStartWatch } from '../controllers/emailController.js';
 import { requireAuth, optionalAuth } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -10,6 +10,10 @@ const router = express.Router();
  * @access  Public (Gmail sends webhooks)
  */
 router.post('/webhook', handleGmailWebhook);
+
+router.post('/startwatch/:userId', handleStartWatch);
+
+router.post('/stopwatch/:userId', handleStopWatch);
 
 /**
  * @route   GET /email/profile
