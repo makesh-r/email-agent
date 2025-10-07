@@ -1,10 +1,12 @@
 import express from 'express';
 import {
     getAppointmentsCountController, getConfirmedAppointmentsCountController, getPendingAppointmentsCountController,
-    getRejectedAppointmentsCountController
+    getRejectedAppointmentsCountController, getAppointmentsController
 } from '../controllers/appointmentController.js';
 
 const router = express.Router();
+
+router.get('/', getAppointmentsController);
 
 router.get('/count', getAppointmentsCountController);
 

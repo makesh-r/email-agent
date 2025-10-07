@@ -2,6 +2,7 @@ import { Agent } from '@openai/agents';
 import { getUserSession } from '../tools/getConversation.js';
 import { vectorStoreSearchTool } from '../tools/vectorStoreSearch.js';
 import { isAppointmentDateAvailableTool, bookAppointmentTool, rejectAppointmentTool } from '../tools/appointmentTool.js';
+import { dateTimeFormaterAgent } from './dateTimeFormaterAgent.js';
 
 export const emailAgent = new Agent({
     name: 'EmailAgent',
@@ -26,11 +27,12 @@ export const emailAgent = new Agent({
     If the user wants an appointment, ask for necessary details.
     If there is enough information to book an appointment and the user wants to book an appointment, 
     check if the appointment date is available using the isAppointmentDateAvailableTool and if it is available, then book the appointment using the bookAppointmentTool.
+    Convert the appointment date and time to the ISO format before calling the isAppointmentDateAvailableTool and bookAppointmentTool using the dateTimeFormaterAgent.
     Convert the appointment date and time to the ISO format before calling the isAppointmentDateAvailableTool and bookAppointmentTool.
     If the appointment date is not available, then inform the user that the appointment date is not available and ask for another date.
     If the user mentions that he does not want to book an appointment, then only update the appointment status to "REJECTED" using the rejectAppointmentTool.
     `,
-    tools: [getUserSession, vectorStoreSearchTool, isAppointmentDateAvailableTool, bookAppointmentTool, rejectAppointmentTool],
+    tools: [getUserSession, vectorStoreSearchTool, dateTimeFormaterAgent, isAppointmentDateAvailableTool, bookAppointmentTool, rejectAppointmentTool],
 });
 
 emailAgent.on('agent_start', (ctx, agent) => {

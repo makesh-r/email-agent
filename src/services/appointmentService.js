@@ -39,12 +39,15 @@ export const isAppointmentDateAvailable = async (assistantEmail, appointmentDate
             .where("status", "==", "CONFIRMED")
             .where("appointmentDateTime", "==", appointmentDateTime)
             .get();
+        if (appointmentRef.empty) {
+            return true;
+        }
         console.log(`[isAppointmentDateAvailable] Appointment date is available for assistantEmail: ${assistantEmail} and appointmentDateTime: ${appointmentDateTime}`);
+        return false;
     } catch (error) {
         console.error(`[isAppointmentDateAvailable] Error checking if appointment date is available for assistantEmail: ${assistantEmail} and appointmentDateTime: ${appointmentDateTime}`, error);
-        throw error;
+        return false;
     }
-    return appointmentRef.empty;
 };
 
 export const bookAppointment = async (assistantEmail, customerEmail, appointmentDateTime, customerName, customerPhone) => {
@@ -165,4 +168,14 @@ export const getAppointmentsCount = async (assistantEmail) => {
         .where("assistantEmail", "==", assistantEmail)
         .get();
     return appointmentsRef.size;
+};
+
+export const getAppointments = async (assistantEmail) => {
+    const appointmentsRef = await db.collection(APPOINTMENTS_COLLECTION)
+        .where("assistantEmail", "==", assistantEmail)
+        .get();
+    return appointmentsRef.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+    }));
 };

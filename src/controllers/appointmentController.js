@@ -1,6 +1,6 @@
 import {
     getAppointmentsCount, getConfirmedAppointmentsCount, getPendingAppointmentsCount,
-    getRejectedAppointmentsCount
+    getRejectedAppointmentsCount, getAppointments
 } from "../services/appointmentService.js";
 import { getUserById } from "../services/authService.js";
 import { sendSuccess, sendError } from "../utils/responseUtil.js";
@@ -31,4 +31,10 @@ export const getRejectedAppointmentsCountController = async (req, res) => {
     const assistantEmail = req.query.assistantEmail;
     const count = await getRejectedAppointmentsCount(assistantEmail);
     return sendSuccess(res, 'Rejected appointments count fetched successfully', { count });
+};
+
+export const getAppointmentsController = async (req, res) => {
+    const assistantEmail = req.query.assistantEmail;
+    const appointments = await getAppointments(assistantEmail);
+    return sendSuccess(res, 'Appointments fetched successfully', { appointments });
 };
